@@ -6,6 +6,30 @@ wildcard_constraints:
   id_="[^/]+",
   linked_db="[^/]+"
 
+rule entrez_fetch_xml:
+  output:
+    xml='data/ncbi/{db}/{id_}/fetch.xml',
+    json='data/ncbi/{db}/{id_}/fetch.json'
+  shell:
+    '''
+      efetch -db {wildcards.db} -id {wildcards.id_} -format xml > {output.xml}
+      xmltojson {output.xml} {output.json}
+    '''
+
+rule entrez_fetch_fasta:
+  output:
+    'data/ncbi/nuccore/{id_}/fetch.fasta'
+  shell:
+    'efetch -db nuccore -id {wildcards.id_} -format fasta> {output}'
+
+rule fasta_header:
+  input:
+    rules.entrez_fetch_fasta.output[0]
+  output:
+    'data/ncbi/nuccore/{id_}/header.txt'
+  shell:
+    'head -n 1 {input} | cut -c 2- > {output}'
+
 rule entrez_summary:
   output:
     xml='data/ncbi/{db}/{id_}/summary.xml',
@@ -14,6 +38,16 @@ rule entrez_summary:
     '''
       esummary -db {wildcards.db} -id {wildcards.id_} > {output.xml}
       xmltojson {output.xml} {output.json}
+    '''
+
+rule assemblyqc_assembly_jq:
+  input:
+    rules.entrez_summary.output.json
+  output:
+    'data/ncbi/{db}/{id_}/assemblyqc.json'
+  shell:
+    '''
+      jq '.DocumentSummarySet.DocumentSummary | {{"organism_name": .SpeciesName, "taxonomy_id": .Taxid, "assembled_genome_acc": .AssemblyAccession, "assembly_file_source": .FtpPath_Assembly_rpt}}' {input} > {output}
     '''
 
 rule entrez_elink_summary:
