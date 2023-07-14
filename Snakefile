@@ -47,7 +47,13 @@ rule assemblyqc_assembly_jq:
     'data/ncbi/{db}/{id_}/assemblyqc.json'
   shell:
     '''
-      jq '.DocumentSummarySet.DocumentSummary | {{"organism_name": .SpeciesName, "taxonomy_id": .Taxid, "assembled_genome_acc": .AssemblyAccession, "assembly_file_source": .FtpPath_Assembly_rpt}}' {input} > {output}
+      jq '.DocumentSummarySet.DocumentSummary |
+        {{
+          "organism_name": .SpeciesName,
+          "taxonomy_id": .Taxid,
+          "assembled_genome_acc": .AssemblyAccession,
+          "assembly_file_source": .FtpPath_GenBank
+        }}' {input} > {output}
     '''
 
 rule entrez_elink_summary:
