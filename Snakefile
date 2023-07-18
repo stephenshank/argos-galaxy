@@ -60,10 +60,15 @@ rule entrez_elink_summary:
   output:
     xml='data/ncbi/{db}/{id_}/links/{linked_db}/summary.xml',
     json='data/ncbi/{db}/{id_}/links/{linked_db}/summary.json'
+  params:
+    temp_xml='data/ncbi/{db}/{id_}/links/{linked_db}/temp_summary.xml',
+    temp_json='data/ncbi/{db}/{id_}/links/{linked_db}/temp_summary.json'
   shell:
     '''
       elink -db {wildcards.db} -id {wildcards.id_} -target {wildcards.linked_db} | esummary > {output.xml}
-      xmltojson {output.xml} {output.json}
+      dss_xml_cleaner -i {output.xml} -o {params.temp_xml}
+      xml_to_json -i {params.temp_xml} -o {params.temp_json}
+      dss_json_cleaner -i {params.temp_json} -o {output.json}
     '''
 
 rule assembly_refseq_links:
@@ -79,4 +84,4 @@ rule assembly_refseq_links:
 rule all:
   input:
     # Original ARGOS BioProject assemblies
-    'data/ncbi/bioproject/PRJNA231221/links/assembly/summary.xml'
+    'data/ncbi/bioproject/PRJNA231221/links/assembly/summary.json'
