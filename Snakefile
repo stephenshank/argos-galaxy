@@ -81,6 +81,22 @@ rule assembly_refseq_links:
       jq -r '.DocumentSummarySet.DocumentSummary | map(select(.SourceDb == "refseq")) | .[].Caption' {input} > {output}
     '''
 
+rule bioproject_assembly_biosample_links:
+  input:
+    rules.entrez_elink_summary.output.json
+  output:
+    'data/ncbi/{db}/{id_}/links/{linked_db}/biosample.txt'
+  shell:
+    'jq -r ".DocumentSummarySet | .[].BioSampleAccn" {input} > {output}'
+
+rule biosample_sra_links:
+  input:
+    rules.entrez_elink_summary.output.json
+  output:
+    'data/ncbi/{db}/{id_}/links/{linked_db}/sra_links.txt'
+  shell:
+    'sed "s/\@//g" {input} | jq -r ".DocumentSummarySet[].Runs.Run.acc" > {output}'
+
 rule all:
   input:
     # Original ARGOS BioProject assemblies
