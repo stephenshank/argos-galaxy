@@ -81,6 +81,16 @@ rule assembly_refseq_links:
       jq -r '.DocumentSummarySet.DocumentSummary | map(select(.SourceDb == "refseq")) | .[].Caption' {input} > {output}
     '''
 
+rule bioproject_assembly_accessions:
+  input:
+    rules.entrez_elink_summary.output.json
+  output:
+    'data/ncbi/{db}/{id_}/links/{linked_db}/accessions.txt'
+  shell:
+    '''
+      jq -r '.DocumentSummarySet[].AssemblyAccession' {input} > {output}
+    '''
+
 rule bioproject_assembly_biosample_links:
   input:
     rules.entrez_elink_summary.output.json
