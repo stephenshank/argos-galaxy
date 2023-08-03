@@ -40,6 +40,14 @@ rule entrez_summary:
       xmltojson {output.xml} {output.json}
     '''
 
+rule summary_biosample_accession:
+  input:
+    rules.entrez_summary.output.json
+  output:
+    'data/ncbi/{db}/{id_}/biosample.txt'
+  shell:
+    'jq -r ".DocumentSummarySet.DocumentSummary.BioSampleAccn" {input} > {output}'
+
 rule assemblyqc_assembly_jq:
   input:
     rules.entrez_summary.output.json
@@ -71,14 +79,24 @@ rule entrez_elink_summary:
       dss_json_cleaner -i {params.temp_json} -o {output.json}
     '''
 
-rule assembly_refseq_links:
+rule refseq_linked_accessions:
   input:
     rules.entrez_elink_summary.output.json
   output:
-    'data/ncbi/{db}/{id_}/links/{linked_db}/refseq.txt'
+    'data/ncbi/{db}/{id_}/links/{linked_db}/refseq_accessions.txt'
   shell:
     '''
-      jq -r '.DocumentSummarySet.DocumentSummary | map(select(.SourceDb == "refseq")) | .[].Caption' {input} > {output}
+      jq -r '.DocumentSummarySet | map(select(.SourceDb == "refseq")) | .[].Caption' {input} > {output}
+    '''
+
+rule sra_linked_run_accessions:
+  input:
+    rules.entrez_elink_summary.output.json
+  output:
+    'data/ncbi/{db}/{id_}/links/{linked_db}/sra_run_accessions.txt'
+  shell:
+    '''
+      jq -r '.DocumentSummarySet[].Runs.Run."@acc"' {input} > {output}
     '''
 
 rule bioproject_assembly_accessions:
