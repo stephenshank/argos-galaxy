@@ -1,4 +1,5 @@
 import json
+import csv
 
 import xmltodict
 
@@ -102,7 +103,14 @@ rule refseq_linked_accessions:
     'data/ncbi/{db}/{id_}/links/nuccore/refseq_accessions.txt'
   shell:
     '''
-      jq -r '.DocumentSummarySet | map(select(.SourceDb == "refseq")) | .[].Caption' {input} > {output}
+      jq -r '
+        .DocumentSummarySet |
+        if type == "array" then
+          map(select(.SourceDb == "refseq")) |
+          .[].Caption
+        else
+          .Caption
+        end' {input} > {output}
     '''
 
 
@@ -119,7 +127,12 @@ rule sra_linked_run_accessions:
     'data/ncbi/{db}/{id_}/links/sra/sra_run_accessions.txt'
   shell:
     '''
-      jq -r '.DocumentSummarySet[].Runs.Run."@acc"' {input} > {output}
+      jq -r '.DocumentSummarySet |
+        if type == "array" then
+          .[].Runs.Run."@acc"
+        else
+          empty
+        end' {input} > {output}
     '''
 
 rule bioproject_assembly_accessions:
@@ -140,7 +153,7 @@ rule biosample_sra_links:
   shell:
     'sed "s/\@//g" {input} | jq -r ".DocumentSummarySet[].Runs.Run.acc" > {output}'
 
-rule argos_all_biosample_data:
+checkpoint argos_all_biosample_data:
   input:
     refseq=rules.refseq_linked_accessions.output[0],
     sra=rules.sra_linked_run_accessions.output[0]
@@ -174,6 +187,38 @@ rule argos_all_assembly_data:
         'assembly_accession': wildcards.id_,
         **biosample_data,
       }, json_file, indent=2)
+
+def asai_input(wildcards):
+    with open('data/ncbi/bioproject/%s/links/assembly/accessions.txt' % wildcards.id_) as ids_file:
+      accessions = [l.strip() for l in ids_file.readlines()]
+    return expand(
+      'data/ncbi/assembly/{id_}/argos_assembly.json',
+      id_=accessions
+    )
+
+rule argos_style_assemblyqc_input:
+  input:
+    asai_input
+  output:
+    'data/ncbi/{db}/{id_}/assemblyqc_input.tsv'
+  run:
+    csv_file = open(output[0], 'w')
+    csv_writer = csv.DictWriter(
+      csv_file,
+      fieldnames=[
+        'assembly_acc', 'sra_acc', 'refseq_acc'
+      ],
+      delimiter="\t"
+    )
+    for assembly_metadata_filepath in input:
+      with open(assembly_metadata_filepath) as json_file:
+        assembly_metadata = json.load(json_file)
+      csv_writer.writerow({
+        'assembly_acc': assembly_metadata['assembly_accession'],
+        'refseq_acc': ','.join(assembly_metadata['refseq_accessions']),
+        'sra_acc': ','.join(assembly_metadata['sra_accessions'])
+      })
+    csv_file.close()
 
 rule all:
   input:
