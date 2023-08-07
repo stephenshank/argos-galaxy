@@ -1,3 +1,5 @@
+import json
+
 import xmltodict
 
 
@@ -5,6 +7,13 @@ wildcard_constraints:
   db="[^/]+",
   id_="[^/]+",
   linked_db="[^/]+"
+
+
+def read_lines(input_filepath):
+  with open(input_filepath) as input_file:
+    lines = [line.strip() for line in input_file.readlines()]
+  return lines
+
 
 rule entrez_fetch_xml:
   output:
@@ -64,7 +73,7 @@ rule assemblyqc_assembly_jq:
         }}' {input} > {output}
     '''
 
-rule entrez_elink_summary:
+checkpoint entrez_elink_summary:
   output:
     xml='data/ncbi/{db}/{id_}/links/{linked_db}/summary.xml',
     json='data/ncbi/{db}/{id_}/links/{linked_db}/summary.json'
@@ -79,21 +88,35 @@ rule entrez_elink_summary:
       dss_json_cleaner -i {params.temp_json} -o {output.json}
     '''
 
+
+def refseq_inputs(wildcards):
+    base = 'data/ncbi/%s/%s/links/nuccore/summary.json'
+    variables = (wildcards.db, wildcards.id_)
+    return base % variables
+
+
 rule refseq_linked_accessions:
   input:
-    rules.entrez_elink_summary.output.json
+    refseq_inputs
   output:
-    'data/ncbi/{db}/{id_}/links/{linked_db}/refseq_accessions.txt'
+    'data/ncbi/{db}/{id_}/links/nuccore/refseq_accessions.txt'
   shell:
     '''
       jq -r '.DocumentSummarySet | map(select(.SourceDb == "refseq")) | .[].Caption' {input} > {output}
     '''
 
+
+def sra_inputs(wildcards):
+    base = 'data/ncbi/%s/%s/links/sra/summary.json'
+    variables = (wildcards.db, wildcards.id_)
+    return base % variables
+
+
 rule sra_linked_run_accessions:
   input:
-    rules.entrez_elink_summary.output.json
+    sra_inputs
   output:
-    'data/ncbi/{db}/{id_}/links/{linked_db}/sra_run_accessions.txt'
+    'data/ncbi/{db}/{id_}/links/sra/sra_run_accessions.txt'
   shell:
     '''
       jq -r '.DocumentSummarySet[].Runs.Run."@acc"' {input} > {output}
@@ -109,14 +132,6 @@ rule bioproject_assembly_accessions:
       jq -r '.DocumentSummarySet[].AssemblyAccession' {input} > {output}
     '''
 
-rule bioproject_assembly_biosample_links:
-  input:
-    rules.entrez_elink_summary.output.json
-  output:
-    'data/ncbi/{db}/{id_}/links/{linked_db}/biosample.txt'
-  shell:
-    'jq -r ".DocumentSummarySet | .[].BioSampleAccn" {input} > {output}'
-
 rule biosample_sra_links:
   input:
     rules.entrez_elink_summary.output.json
@@ -124,6 +139,41 @@ rule biosample_sra_links:
     'data/ncbi/{db}/{id_}/links/{linked_db}/sra_links.txt'
   shell:
     'sed "s/\@//g" {input} | jq -r ".DocumentSummarySet[].Runs.Run.acc" > {output}'
+
+rule argos_all_biosample_data:
+  input:
+    refseq=rules.refseq_linked_accessions.output[0],
+    sra=rules.sra_linked_run_accessions.output[0]
+  output:
+    "data/ncbi/{db}/{id_}/argos_biosample.json"
+  run:
+    refseq_accessions = read_lines(input.refseq)
+    sra_accessions = read_lines(input.sra)
+    with open(output[0], 'w') as json_file:
+      json.dump({
+        'refseq_accessions': refseq_accessions,
+        'sra_accessions': sra_accessions
+      }, json_file, indent=2)
+
+def aaad_input(wildcards):
+    bs_path = "data/ncbi/assembly/%s/biosample.txt" % wildcards.id_
+    with open(bs_path) as f:
+      biosample_accession = f.read().strip()
+    return "data/ncbi/biosample/%s/argos_biosample.json" % biosample_accession
+
+rule argos_all_assembly_data:
+  input:
+    aaad_input
+  output:
+    "data/ncbi/{db}/{id_}/argos_assembly.json"
+  run:
+    with open(input[0]) as json_file:
+      biosample_data = json.load(json_file)
+    with open(output[0], 'w') as json_file:
+      json.dump({
+        'assembly_accession': wildcards.id_,
+        **biosample_data,
+      }, json_file, indent=2)
 
 rule all:
   input:
