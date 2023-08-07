@@ -74,7 +74,7 @@ rule assemblyqc_assembly_jq:
         }}' {input} > {output}
     '''
 
-checkpoint entrez_elink_summary:
+rule entrez_elink_summary:
   output:
     xml='data/ncbi/{db}/{id_}/links/{linked_db}/summary.xml',
     json='data/ncbi/{db}/{id_}/links/{linked_db}/summary.json'
@@ -142,7 +142,13 @@ rule bioproject_assembly_accessions:
     'data/ncbi/{db}/{id_}/links/{linked_db}/accessions.txt'
   shell:
     '''
-      jq -r '.DocumentSummarySet[].AssemblyAccession' {input} > {output}
+      jq -r ' .DocumentSummarySet |
+        if type == "array" then
+          .[].AssemblyAccession
+        else
+          .AssemblyAccession
+        end
+      ' {input} > {output}
     '''
 
 rule biosample_sra_links:
@@ -210,6 +216,7 @@ rule argos_style_assemblyqc_input:
       ],
       delimiter="\t"
     )
+    csv_writer.writeheader()
     for assembly_metadata_filepath in input:
       with open(assembly_metadata_filepath) as json_file:
         assembly_metadata = json.load(json_file)
