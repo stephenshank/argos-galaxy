@@ -16,6 +16,23 @@ def read_lines(input_filepath):
   return lines
 
 
+rule taxonomy_bioprojects:
+  output:
+    xml="data/ncbi/{db}/{id_}/tax_bps.xml",
+    json="data/ncbi/{db}/{id_}/tax_bps.json",
+    accessions="data/ncbi/{db}/{id_}/tax_bps.txt"
+  params:
+    temp_xml='data/ncbi/{db}/{id_}/temp_tax_bps.xml',
+    temp_json='data/ncbi/{db}/{id_}/temp_tax_bps.json'
+  shell:
+    '''
+      esearch -db bioproject -query "txid{wildcards.id_}[ORGN]" | esummary > {output.xml}
+      dss_xml_cleaner -i {output.xml} -o {params.temp_xml}
+      xml_to_json -i {params.temp_xml} -o {params.temp_json}
+      dss_json_cleaner -i {params.temp_json} -o {output.json}
+      jq -r '.DocumentSummarySet[].Project_Acc' {output.json} > {output.accessions}
+    '''
+
 rule entrez_fetch_xml:
   output:
     xml='data/ncbi/{db}/{id_}/fetch.xml',
