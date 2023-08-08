@@ -106,7 +106,7 @@ rule refseq_linked_accessions:
       jq -r '
         .DocumentSummarySet |
         if type == "array" then
-          map(select(.SourceDb == "refseq")) |
+          map(select(.SourceDb == "refseq" // .SourceDb == "insd")) |
           .[].Caption
         else
           .Caption
@@ -131,7 +131,7 @@ rule sra_linked_run_accessions:
         if type == "array" then
           .[].Runs.Run."@acc"
         else
-          empty
+          .Runs.Run."@acc"
         end' {input} > {output}
     '''
 
@@ -159,7 +159,7 @@ rule biosample_sra_links:
   shell:
     'sed "s/\@//g" {input} | jq -r ".DocumentSummarySet[].Runs.Run.acc" > {output}'
 
-checkpoint argos_all_biosample_data:
+rule argos_all_biosample_data:
   input:
     refseq=rules.refseq_linked_accessions.output[0],
     sra=rules.sra_linked_run_accessions.output[0]
