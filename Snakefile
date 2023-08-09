@@ -33,6 +33,24 @@ rule taxonomy_bioprojects:
       jq -r '.DocumentSummarySet[].Project_Acc' {output.json} > {output.accessions}
     '''
 
+rule taxonomy_bioprojects_with_assemblies:
+  input:
+    rules.taxonomy_bioprojects.output.accessions
+  output:
+    "data/ncbi/{db}/{id_}/assembly_tax_bps.txt"
+  run:
+    with open(input[0]) as tax_bp_file:
+      tax_bps = [l.strip() for l in tax_bp_file.readlines()]
+    bps_with_assemblies = []
+    for tax_bp in tax_bps:
+      base = 'data/ncbi/bioproject/%s/links/assembly/accessions.txt'
+      with open(base % tax_bp) as links_file:
+        assemblies = links_file.read()
+      if assemblies != 'null\n':
+        bps_with_assemblies.append(tax_bp)
+    with open(output[0], 'w') as output_file:
+      output_file.write('\n'.join(bps_with_assemblies))
+
 rule entrez_fetch_xml:
   output:
     xml='data/ncbi/{db}/{id_}/fetch.xml',
@@ -167,6 +185,14 @@ rule bioproject_assembly_accessions:
         end
       ' {input} > {output}
     '''
+
+rule bioproject_biosample_accessions:
+  input:
+    rules.entrez_elink_summary.output.json
+  output:
+    'data/ncbi/{db}/{id_}/links/{linked_db}/biosample_accessions.txt'
+  shell:
+    'jq -r ".DocumentSummarySet[].Accession" {input} > {output}'
 
 rule biosample_sra_links:
   input:
