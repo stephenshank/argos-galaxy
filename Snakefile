@@ -164,9 +164,19 @@ rule sra_linked_run_accessions:
     '''
       jq -r '.DocumentSummarySet |
         if type == "array" then
-          .[].Runs.Run."@acc"
+          .[].Runs.Run |
+            if type == "array" then
+              .[]."@acc"
+            else
+              ."@acc"
+            end
         else
-          .Runs.Run."@acc"
+          .Runs.Run |
+            if type == "array" then
+              .[]."@acc"
+            else
+              ."@acc"
+            end
         end' {input} > {output}
     '''
 
