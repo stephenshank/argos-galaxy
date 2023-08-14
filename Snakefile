@@ -325,6 +325,52 @@ rule argos_style_assemblyqc_input:
       })
     csv_file.close()
 
+rule assembly_taxon_bp_extraction:
+  input:
+    fetch=rules.entrez_fetch_xml.output.json,
+    sra=rules.count_sra_runs_in_assembly_bps_for_taxon.output[0]
+  output:
+    'data/ncbi/{db}/{id_}/assembly_bp_sra_taxon_merged.json'
+  shell:
+    '''
+      jq -s '
+        (
+          .[0].TaxaSet.Taxon | {{
+          "lineage": .Lineage,
+          "scientific_name": .ScientificName,
+          "tax_id": .TaxId
+        }}) * .[1]' {input.fetch} {input.sra} > {output}
+    '''
+
+
+def all_taxon_bp_assembly_sra(wildcards):
+  tax_ids = read_lines('./data/tax_ids.txt')
+  return expand(
+    'data/ncbi/taxonomy/{tax_id}/assembly_bp_sra_taxon_merged.json',
+    tax_id=tax_ids
+  )
+
+rule taxon_bp_assembly_sra_csv:
+  input:
+    all_taxon_bp_assembly_sra
+  output:
+    "data/taxon_bp_assembly_sra.csv"
+  run:
+    csv_file = open(output[0], 'w')
+    csv_writer = csv.writer(csv_file)
+    csv_writer.writerow(['tax_id', 'scientific_name', 'tax_id', 'bioproject', 'sra_links'])
+    for filepath in input:
+      data = read_json(filepath)
+      lineage = data['lineage']
+      del data['lineage']
+      scientific_name = data['scientific_name']
+      del data['scientific_name']
+      tax_id = data['tax_id']
+      del data['tax_id']
+      for key, value in data.items():
+        csv_writer.writerow([tax_id, scientific_name, tax_id, key, int(value)])
+    csv_file.close()
+    
 rule all:
   input:
     # Original ARGOS BioProject assemblies
