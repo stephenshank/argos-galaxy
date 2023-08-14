@@ -16,6 +16,17 @@ def read_lines(input_filepath):
   return lines
 
 
+def read_json(input_filepath):
+  with open(input_filepath) as input_file:
+    d = json.load(input_file)
+  return d
+
+
+def write_json(the_json, filepath):
+  with open(filepath, 'w') as json_file:
+    json.dump(the_json, json_file)
+
+
 rule taxonomy_bioprojects:
   output:
     xml="data/ncbi/{db}/{id_}/tax_bps.xml",
@@ -179,6 +190,40 @@ rule sra_linked_run_accessions:
             end
         end' {input} > {output}
     '''
+
+rule count_sra_run_accessions_json:
+  input:
+    rules.sra_linked_run_accessions.output[0]
+  output:
+    'data/ncbi/{db}/{id_}/sra_run_counts.json'
+  run:
+    lines = [
+      line for line in read_lines(input[0]) if line != 'null'
+    ]
+    with open(output[0], 'w') as output_file:
+      json.dump({
+        wildcards.id_: len(lines)
+      }, output_file)
+
+def count_sra_runs_in_assembly_bps_for_taxon_input(wildcards):
+  base = 'data/ncbi/taxonomy/%s/assembly_tax_bps.txt'
+  bp_accessions = read_lines(base % wildcards.id_)
+  return expand(
+    'data/ncbi/bioproject/{bp_accession}/sra_run_counts.json',
+    bp_accession=bp_accessions
+  )
+
+rule count_sra_runs_in_assembly_bps_for_taxon:
+  input:
+    count_sra_runs_in_assembly_bps_for_taxon_input
+  output:
+    'data/ncbi/{db}/{id_}/sra_run_counts_for_assembly_bps.json'
+  run:
+    all_sra_run_counts = {}
+    for input_filepath in input:
+      sra_run_counts = read_json(input_filepath)
+      all_sra_run_counts.update(sra_run_counts)
+    write_json(all_sra_run_counts, output[0])
 
 rule bioproject_assembly_accessions:
   input:
