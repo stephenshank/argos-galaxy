@@ -116,7 +116,8 @@ rule assemblyqc_assembly_jq:
           "organism_name": .SpeciesName,
           "taxonomy_id": .Taxid,
           "assembled_genome_acc": .AssemblyAccession,
-          "assembly_file_source": .FtpPath_GenBank
+          "assembly_file_source": .FtpPath_GenBank,
+          "assembly_status": .AssemblyStatus
         }}' {input} > {output}
     '''
 
@@ -280,15 +281,18 @@ def aaad_input(wildcards):
 
 rule argos_all_assembly_data:
   input:
-    aaad_input
+    biosample=aaad_input,
+    assembly=rules.assemblyqc_assembly_jq.output[0]
   output:
     "data/ncbi/{db}/{id_}/argos_assembly.json"
   run:
-    with open(input[0]) as json_file:
-      biosample_data = json.load(json_file)
+    biosample_data = read_json(input.biosample)
+    assembly_data = read_json(input.assembly)
     with open(output[0], 'w') as json_file:
       json.dump({
         'assembly_accession': wildcards.id_,
+        'organism_name': assembly_data['organism_name'],
+        'assembly_status': assembly_data['assembly_status'],
         **biosample_data,
       }, json_file, indent=2)
 
