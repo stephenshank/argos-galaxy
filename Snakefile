@@ -258,6 +258,25 @@ rule biosample_sra_links:
   shell:
     'sed "s/\@//g" {input} | jq -r ".DocumentSummarySet[].Runs.Run.acc" > {output}'
 
+rule argos_sra_extraction:
+  input:
+    rules.entrez_fetch_xml.output.json
+  output:
+    'data/ncbi/{db}/{id_}/argos_sra_extract.json'
+  shell:
+    '''
+      jq '.EXPERIMENT_PACKAGE_SET.EXPERIMENT_PACKAGE.EXPERIMENT | 
+        {{
+          platform: {{
+            "ILLUMINA": "illumina",
+            "PACBIO_SMRT": "pacbio"
+          }}[.PLATFORM | keys[0]],
+          library: .DESIGN.LIBRARY_DESCRIPTOR.LIBRARY_LAYOUT | keys[0] | ascii_downcase,
+          accession: "{wildcards.id_}"
+        }}
+      ' {input} > {output}
+    '''
+
 rule argos_all_biosample_data:
   input:
     refseq=rules.refseq_linked_accessions.output[0],
@@ -267,10 +286,15 @@ rule argos_all_biosample_data:
   run:
     refseq_accessions = read_lines(input.refseq)
     sra_accessions = read_lines(input.sra)
+    sra_data = []
+    for sra_accession in sra_accessions:
+      sra_filepath = "data/ncbi/sra/%s/argos_sra_extract.json" % sra_accession
+      sra_datum = read_json(sra_filepath)
+      sra_data.append(sra_datum)
     with open(output[0], 'w') as json_file:
       json.dump({
         'refseq_accessions': refseq_accessions,
-        'sra_accessions': sra_accessions
+        'sra': sra_data
       }, json_file, indent=2)
 
 def aaad_input(wildcards):
@@ -295,6 +319,7 @@ rule argos_all_assembly_data:
         'assembly_status': assembly_data['assembly_status'],
         **biosample_data,
       }, json_file, indent=2)
+
 
 def asai_input(wildcards):
     with open('data/ncbi/bioproject/%s/links/assembly/accessions.txt' % wildcards.id_) as ids_file:
